@@ -33,7 +33,7 @@ import {OptionsSchema} from './options.js';
 const DEFAULT_COMPONENT_NAMES = ['FormattedMessage', 'FormattedHTMLMessage'];
 
 const EXTRACTED = Symbol('ReactIntlExtracted');
-const DESCRIPTOR_PROPS = new Set(['id', 'description', 'defaultMessage']);
+// const DESCRIPTOR_PROPS = new Set(['id', 'description', 'defaultMessage']);
 
 interface MessageDescriptor {
   id: string;
@@ -162,13 +162,15 @@ function createMessageDescriptor(
   ][]
 ): MessageDescriptorPath {
   return propPaths.reduce(
-    (hash: MessageDescriptorPath, [keyPath, valuePath]) => {
+    (hash: any, [keyPath, valuePath]) => {
       const key = getMessageDescriptorKey(keyPath);
 
-      if (DESCRIPTOR_PROPS.has(key)) {
-        hash[key as 'id'] = valuePath as NodePath<StringLiteral>;
+      if (key === 'text') {
+        hash.id = valuePath;
+        hash.defaultMessage = valuePath;
+      } else if (key === 'description') {
+        hash.description = valuePath;
       }
-
       return hash;
     },
     {
@@ -260,22 +262,11 @@ function referencesImport(
 function isFormatMessageCall(
   callee: NodePath<Expression | V8IntrinsicIdentifier>
 ) {
-  if (!callee.isMemberExpression()) {
+  if (!callee.isIdentifier()) {
     return false;
   }
 
-  const object = callee.get('object');
-  const property = callee.get('property') as NodePath<Identifier>;
-
-  return (
-    property.isIdentifier() &&
-    property.node.name === 'formatMessage' &&
-    // things like `intl.formatMessage`
-    ((object.isIdentifier() && object.node.name === 'intl') ||
-      // things like `this.props.intl.formatMessage`
-      (object.isMemberExpression() &&
-        (object.get('property') as NodePath<Identifier>).node.name === 'intl'))
-  );
+  return callee.node.name === 'formatMessage';
 }
 
 function assertObjectExpression(
@@ -490,35 +481,56 @@ export default declare((api: any, options: OptionsSchema) => {
          * Process MessageDescriptor
          * @param messageDescriptor Message Descriptor
          */
-        function processMessageObject(
-          messageDescriptor: NodePath<ObjectExpression>
-        ) {
-          assertObjectExpression(messageDescriptor, callee);
+        function processMessageObject(messageDescriptor: any, arg3?: any) {
+          var descriptor: any;
+          if (messageDescriptor.type === 'StringLiteral') {
+            const {value} = messageDescriptor.node as any;
+            descriptor = {
+              id: value,
+              defaultMessage: value,
+              description: arg3 ? arg3.description : '',
+            };
 
-          if (wasExtracted(messageDescriptor)) {
-            return;
+            if (arg3) {
+              var properties = arg3.get('properties');
+              properties.forEach((prop: any) => {
+                if (
+                  getMessageDescriptorKey(prop.get('key')) === 'description'
+                ) {
+                  descriptor.description = getMessageDescriptorKey(
+                    prop.get('value')
+                  );
+                }
+              });
+            }
+          } else {
+            assertObjectExpression(messageDescriptor, callee);
+
+            if (wasExtracted(messageDescriptor)) {
+              return;
+            }
+
+            const properties = messageDescriptor.get('properties') as NodePath<
+              ObjectProperty
+            >[];
+
+            const descriptorPath = createMessageDescriptor(
+              properties.map(
+                prop =>
+                  [prop.get('key'), prop.get('value')] as [
+                    NodePath<Identifier>,
+                    NodePath<StringLiteral>
+                  ]
+              )
+            );
+
+            // Evaluate the Message Descriptor values, then store it.
+            descriptor = evaluateMessageDescriptor(
+              descriptorPath,
+              false,
+              overrideIdFn
+            );
           }
-
-          const properties = messageDescriptor.get('properties') as NodePath<
-            ObjectProperty
-          >[];
-
-          const descriptorPath = createMessageDescriptor(
-            properties.map(
-              prop =>
-                [prop.get('key'), prop.get('value')] as [
-                  NodePath<Identifier>,
-                  NodePath<StringLiteral>
-                ]
-            )
-          );
-
-          // Evaluate the Message Descriptor values, then store it.
-          const descriptor = evaluateMessageDescriptor(
-            descriptorPath,
-            false,
-            overrideIdFn
-          );
           storeMessage(descriptor, messageDescriptor, opts, filename, messages);
 
           // Remove description since it's not used at runtime.
@@ -565,9 +577,12 @@ export default declare((api: any, options: OptionsSchema) => {
 
         // Check that this is `intl.formatMessage` call
         if (extractFromFormatMessageCall && isFormatMessageCall(callee)) {
-          const messageDescriptor = path.get('arguments')[0];
+          const args = path.get('arguments');
+          var messageDescriptor = args[0];
           if (messageDescriptor.isObjectExpression()) {
             processMessageObject(messageDescriptor);
+          } else if (messageDescriptor.type === 'StringLiteral') {
+            processMessageObject(messageDescriptor, args[2]);
           }
         }
       },

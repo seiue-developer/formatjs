@@ -1,5 +1,5 @@
-import {ExtractedMessageDescriptor} from 'babel-plugin-react-intl/dist';
-import {OptionsSchema} from 'babel-plugin-react-intl/dist/options';
+import {ExtractedMessageDescriptor} from '@seiue/babel-plugin-react-intl/dist';
+import {OptionsSchema} from '@seiue/babel-plugin-react-intl/dist/options';
 import * as babel from '@babel/core';
 import {warn, getStdinAsString} from './console_utils';
 import keyBy from 'lodash/keyBy';
@@ -44,7 +44,7 @@ function getBabelConfig(
       '@babel/plugin-proposal-class-properties',
       // We want to make sure that `const enum` does not throw an error.
       ...(isTS || isTSX ? [require.resolve('babel-plugin-const-enum')] : []),
-      [require.resolve('babel-plugin-react-intl'), reactIntlOptions],
+      [require.resolve('@seiue/babel-plugin-react-intl'), reactIntlOptions],
     ],
     highlightCode: true,
     // Extraction of string messages does not output the transformed JavaScript.
@@ -72,8 +72,37 @@ function getReactIntlMessages(
     const messages: ExtractedMessageDescriptor[] = (babelResult.metadata as any)[
       'react-intl'
     ].messages;
+    messages.forEach((m: any) => {
+      m.filename = (babelResult as any).options.filename;
+    });
     return keyBy(messages, 'id');
   }
+}
+
+function getAppName(path: string) {
+  const result = path.match(/.*\/apps\/([a-z\-]*)\/src\/.*/);
+
+  return result ? result[1] : null;
+}
+
+function getPackageName(path: string) {
+  const result = path.match(/.*\/packages\/src\/([a-z\-]*)\/.*/);
+  return result ? result[1] : null;
+}
+
+function getFeatureName(path: string) {
+  const result = path.match(
+    /.*\/apps\/[a-z\-]*\/src\/features\/([a-z\-]+)\/.*/
+  );
+  return result ? result[1] : null;
+}
+
+function merge(sourceObj: any, targetObj: any) {
+  Object.entries(targetObj).forEach(([key, value]) => {
+    if (value) sourceObj[key] = value;
+  });
+
+  return sourceObj;
 }
 
 export default async function extract(
@@ -107,7 +136,47 @@ export default async function extract(
       const singleFileExtractedMessages = getReactIntlMessages(babelResult);
       // Aggregate result when we have to output to a single file
       if (outFile || printMessagesToStdout) {
-        Object.assign(extractedMessages, singleFileExtractedMessages);
+        Object.entries(singleFileExtractedMessages).forEach(
+          ([key, message]: any) => {
+            const {filename} = message;
+
+            message.appName = getAppName(filename);
+            message.featureName = getFeatureName(filename);
+            message.packageName = getPackageName(filename);
+
+            const existMessage: any = extractedMessages[key];
+
+            // 如果不重复，直接赋值
+            if (!existMessage) return (extractedMessages[key] = message);
+
+            message.isDuplicate = true;
+
+            if (message.appName) {
+              if (existMessage.appName === message.appName) {
+                if (existMessage.featureName === message.featureName) {
+                  // 如果在一个分支内，则直接覆盖
+                  extractedMessages[key] = merge(existMessage, message);
+
+                  return;
+                }
+                // 如果不在一个分支内，则向上归集到 app 下
+                message.featureName = null;
+                extractedMessages[key] = merge(existMessage, message);
+                return;
+              }
+
+              message.appName = null;
+              return;
+            }
+
+            if (existMessage.packageName === message.packageName) {
+              extractedMessages[key] = merge(existMessage, message);
+              return;
+            }
+
+            message.packageName = null;
+          }
+        );
       }
     }
   } else {

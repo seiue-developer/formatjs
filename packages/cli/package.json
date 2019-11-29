@@ -1,6 +1,6 @@
 {
-  "name": "@seiue/@formatjs/cli",
-  "version": "1.2.0",
+  "name": "@seiue/formatjs-cli",
+  "version": "1.2.1",
   "description": "A CLI for formatjs.",
   "keywords": [
     "intl",
@@ -32,7 +32,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/formatjs/formatjs.git"
+    "url": "git+ssh://git@github.com/seiue-developer/formatjs.git"
   },
   "scripts": {
     "clean": "rimraf lib",
