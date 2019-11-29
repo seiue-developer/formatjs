@@ -1,10 +1,10 @@
 {
-  "name": "babel-plugin-react-intl",
-  "version": "5.1.8",
+  "name": "@seiue/babel-plugin-react-intl",
+  "version": "5.2.0",
   "description": "Extracts string messages for translation from modules that use React Intl.",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/formatjs/formatjs.git"
+    "url": "git+https://github.com/seiue-developer/formatjs.git"
   },
   "license": "BSD-3-Clause",
   "main": "dist/index.js",
@@ -34,9 +34,9 @@
     "react-intl"
   ],
   "bugs": {
-    "url": "https://github.com/formatjs/formatjs/issues"
+    "url": "https://github.com/seiue-developer/formatjs/issues"
   },
-  "homepage": "https://github.com/formatjs/formatjs#readme",
+  "homepage": "https://github.com/seiue-developer/formatjs#readme",
   "gitHead": "8b0baec8eda5002715cf893274fe59782fc2d371",
   "devDependencies": {
     "json-schema-to-typescript": "^7.1.0"
