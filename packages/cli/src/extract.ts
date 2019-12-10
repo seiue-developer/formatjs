@@ -10,6 +10,7 @@ import {interpolateName} from 'loader-utils';
 export type ExtractCLIOptions = Omit<OptionsSchema, 'overrideIdFn'> & {
   outFile?: string;
   idInterpolationPattern?: string;
+  printMessagesToStdout?: boolean;
 };
 
 function getBabelConfig(
@@ -97,14 +98,6 @@ function getFeatureName(path: string) {
   return result ? result[1] : null;
 }
 
-function merge(sourceObj: any, targetObj: any) {
-  Object.entries(targetObj).forEach(([key, value]) => {
-    if (value) sourceObj[key] = value;
-  });
-
-  return sourceObj;
-}
-
 export default async function extract(
   files: readonly string[],
   {outFile, idInterpolationPattern, ...extractOpts}: ExtractCLIOptions
@@ -113,8 +106,11 @@ export default async function extract(
   if (outFile) {
     babelOpts.messagesDir = undefined;
   }
-  const printMessagesToStdout = babelOpts.messagesDir == null && !outFile;
-  let extractedMessages: Record<string, ExtractedMessageDescriptor> = {};
+  const printMessagesToStdout =
+    extractOpts.printMessagesToStdout !== undefined
+      ? extractOpts.printMessagesToStdout
+      : babelOpts.messagesDir == null && !outFile;
+  let extractedMessages: Record<string, ExtractedMessageDescriptor[]> = {};
 
   if (files.length > 0) {
     for (const file of files) {
@@ -147,34 +143,9 @@ export default async function extract(
             const existMessage: any = extractedMessages[key];
 
             // 如果不重复，直接赋值
-            if (!existMessage) return (extractedMessages[key] = message);
+            if (!existMessage) return (extractedMessages[key] = [message]);
 
-            message.isDuplicate = true;
-
-            if (message.appName) {
-              if (existMessage.appName === message.appName) {
-                if (existMessage.featureName === message.featureName) {
-                  // 如果在一个分支内，则直接覆盖
-                  extractedMessages[key] = merge(existMessage, message);
-
-                  return;
-                }
-                // 如果不在一个分支内，则向上归集到 app 下
-                message.featureName = null;
-                extractedMessages[key] = merge(existMessage, message);
-                return;
-              }
-
-              message.appName = null;
-              return;
-            }
-
-            if (existMessage.packageName === message.packageName) {
-              extractedMessages[key] = merge(existMessage, message);
-              return;
-            }
-
-            message.packageName = null;
+            extractedMessages[key].push(message);
           }
         );
       }
@@ -203,7 +174,23 @@ export default async function extract(
       getBabelConfig('<stdin>', babelOpts)
     );
     if (printMessagesToStdout) {
-      extractedMessages = getReactIntlMessages(babelResult);
+      const singleFileExtractedMessages = getReactIntlMessages(babelResult);
+      Object.entries(singleFileExtractedMessages).forEach(
+        ([key, message]: any) => {
+          const {filename} = message;
+
+          message.appName = getAppName(filename);
+          message.featureName = getFeatureName(filename);
+          message.packageName = getPackageName(filename);
+
+          const existMessage: any = extractedMessages[key];
+
+          // 如果不重复，直接赋值
+          if (!existMessage) return (extractedMessages[key] = [message]);
+
+          extractedMessages[key].push(message);
+        }
+      );
     }
   }
   if (outFile) {
@@ -211,10 +198,14 @@ export default async function extract(
       spaces: 2,
     });
   }
-  if (printMessagesToStdout) {
-    process.stdout.write(
-      JSON.stringify(Object.values(extractedMessages), null, 2)
-    );
-    process.stdout.write('\n');
-  }
+
+  // 不需要这个控制台输出
+  // if (printMessagesToStdout) {
+  //   process.stdout.write(
+  //     JSON.stringify(Object.values(extractedMessages), null, 2)
+  //   );
+  //   process.stdout.write('\n');
+  // }
+
+  return extractedMessages;
 }

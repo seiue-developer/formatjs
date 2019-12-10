@@ -694,10 +694,10 @@
     lodash "^4.17.13"
     to-fast-properties "^2.0.0"
 
-"@seiue/babel-plugin-react-intl@^5.2.0":
-  version "5.2.0"
-  resolved "http://npm.seiue.com:4873/@seiue%2fbabel-plugin-react-intl/-/babel-plugin-react-intl-5.2.0.tgz#eb6eced2ea3d64a9a4bd7096cd640234bd28f457"
-  integrity sha512-9JY3GR1UvTKNkmpRblwpiCWS2vDNJJuwty9hDhqjSbNUX4gflripQJ+BOlB65x7iEs2Sp2plf1Q2Bqe5vhvwNA==
+"@seiue/babel-plugin-react-intl@^5.2.1":
+  version "5.2.1"
+  resolved "http://npm.seiue.com:4873/@seiue%2fbabel-plugin-react-intl/-/babel-plugin-react-intl-5.2.1.tgz#c62ef23b5ff12ae8f5b0c592b4c0fb17203c8214"
+  integrity sha512-61jj21gMVeVdphK+wNTyp9xC06L+7+mU/waEHu2JCyGrqM+jr2LK3wfpft06gVt9Q4ZmLvJoN+SJpb8mvPX54A==
   dependencies:
     "@babel/core" "^7.7.2"
     "@babel/helper-plugin-utils" "^7.0.0"

@@ -222,19 +222,20 @@ function storeMessage(
     );
   }
 
-  if (messages.has(id)) {
-    const existing = messages.get(id);
+  // 由于现在不存在设置 defaultMessage 的情况，暂时不需要检测重复
+  // if (messages.has(id)) {
+  //   const existing = messages.get(id);
 
-    if (
-      description !== existing!.description ||
-      defaultMessage !== existing!.defaultMessage
-    ) {
-      throw path.buildCodeFrameError(
-        `[React Intl] Duplicate message id: "${id}", ` +
-          'but the `description` and/or `defaultMessage` are different.'
-      );
-    }
-  }
+  //   if (
+  //     description !== existing!.description ||
+  //     defaultMessage !== existing!.defaultMessage
+  //   ) {
+  //     throw path.buildCodeFrameError(
+  //       `[React Intl] Duplicate message id: "${id}", ` +
+  //         'but the `description` and/or `defaultMessage` are different.'
+  //     );
+  //   }
+  // }
 
   let loc = {};
   if (extractSourceLocation) {
@@ -273,6 +274,8 @@ function assertObjectExpression(
   path: NodePath,
   callee: NodePath<Expression | V8IntrinsicIdentifier>
 ): path is NodePath<ObjectExpression> {
+  if (path.type === 'TemplateLiteral') {
+  }
   if (!path || !path.isObjectExpression()) {
     throw path.buildCodeFrameError(
       `[React Intl] \`${
@@ -503,6 +506,8 @@ export default declare((api: any, options: OptionsSchema) => {
                 }
               });
             }
+          } else if (messageDescriptor.type === 'TemplateLiteral') {
+            throw path.buildCodeFrameError('国际化文本不能使用模板字符串');
           } else {
             assertObjectExpression(messageDescriptor, callee);
 
