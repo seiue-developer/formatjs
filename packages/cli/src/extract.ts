@@ -1,5 +1,5 @@
-import {ExtractedMessageDescriptor} from 'babel-plugin-react-intl/dist';
-import {OptionsSchema} from 'babel-plugin-react-intl/dist/options';
+import {ExtractedMessageDescriptor} from '@seiue/babel-plugin-react-intl/dist';
+import {OptionsSchema} from '@seiue/babel-plugin-react-intl/dist/options';
 import * as babel from '@babel/core';
 import {warn, getStdinAsString} from './console_utils';
 import keyBy from 'lodash/keyBy';
@@ -10,6 +10,7 @@ import {interpolateName} from 'loader-utils';
 export type ExtractCLIOptions = Omit<OptionsSchema, 'overrideIdFn'> & {
   outFile?: string;
   idInterpolationPattern?: string;
+  printMessagesToStdout?: boolean;
 };
 
 function getBabelConfig(
@@ -44,7 +45,7 @@ function getBabelConfig(
       '@babel/plugin-proposal-class-properties',
       // We want to make sure that `const enum` does not throw an error.
       ...(isTS || isTSX ? [require.resolve('babel-plugin-const-enum')] : []),
-      [require.resolve('babel-plugin-react-intl'), reactIntlOptions],
+      [require.resolve('@seiue/babel-plugin-react-intl'), reactIntlOptions],
     ],
     highlightCode: true,
     // Extraction of string messages does not output the transformed JavaScript.
@@ -72,8 +73,29 @@ function getReactIntlMessages(
     const messages: ExtractedMessageDescriptor[] = (babelResult.metadata as any)[
       'react-intl'
     ].messages;
+    messages.forEach((m: any) => {
+      m.filename = (babelResult as any).options.filename;
+    });
     return keyBy(messages, 'id');
   }
+}
+
+function getAppName(path: string) {
+  const result = path.match(/.*\/apps\/([a-z\-]*)\/src\/.*/);
+
+  return result ? result[1] : null;
+}
+
+function getPackageName(path: string) {
+  const result = path.match(/.*\/packages\/src\/([a-z\-]*)\/.*/);
+  return result ? result[1] : null;
+}
+
+function getFeatureName(path: string) {
+  const result = path.match(
+    /.*\/apps\/[a-z\-]*\/src\/features\/([a-z\-]+)\/.*/
+  );
+  return result ? result[1] : null;
 }
 
 export default async function extract(
@@ -84,8 +106,11 @@ export default async function extract(
   if (outFile) {
     babelOpts.messagesDir = undefined;
   }
-  const printMessagesToStdout = babelOpts.messagesDir == null && !outFile;
-  let extractedMessages: Record<string, ExtractedMessageDescriptor> = {};
+  const printMessagesToStdout =
+    extractOpts.printMessagesToStdout !== undefined
+      ? extractOpts.printMessagesToStdout
+      : babelOpts.messagesDir == null && !outFile;
+  let extractedMessages: Record<string, ExtractedMessageDescriptor[]> = {};
 
   if (files.length > 0) {
     for (const file of files) {
@@ -107,7 +132,22 @@ export default async function extract(
       const singleFileExtractedMessages = getReactIntlMessages(babelResult);
       // Aggregate result when we have to output to a single file
       if (outFile || printMessagesToStdout) {
-        Object.assign(extractedMessages, singleFileExtractedMessages);
+        Object.entries(singleFileExtractedMessages).forEach(
+          ([key, message]: any) => {
+            const {filename} = message;
+
+            message.appName = getAppName(filename);
+            message.featureName = getFeatureName(filename);
+            message.packageName = getPackageName(filename);
+
+            const existMessage: any = extractedMessages[key];
+
+            // 如果不重复，直接赋值
+            if (!existMessage) return (extractedMessages[key] = [message]);
+
+            extractedMessages[key].push(message);
+          }
+        );
       }
     }
   } else {
@@ -134,7 +174,23 @@ export default async function extract(
       getBabelConfig('<stdin>', babelOpts)
     );
     if (printMessagesToStdout) {
-      extractedMessages = getReactIntlMessages(babelResult);
+      const singleFileExtractedMessages = getReactIntlMessages(babelResult);
+      Object.entries(singleFileExtractedMessages).forEach(
+        ([key, message]: any) => {
+          const {filename} = message;
+
+          message.appName = getAppName(filename);
+          message.featureName = getFeatureName(filename);
+          message.packageName = getPackageName(filename);
+
+          const existMessage: any = extractedMessages[key];
+
+          // 如果不重复，直接赋值
+          if (!existMessage) return (extractedMessages[key] = [message]);
+
+          extractedMessages[key].push(message);
+        }
+      );
     }
   }
   if (outFile) {
@@ -142,10 +198,14 @@ export default async function extract(
       spaces: 2,
     });
   }
-  if (printMessagesToStdout) {
-    process.stdout.write(
-      JSON.stringify(Object.values(extractedMessages), null, 2)
-    );
-    process.stdout.write('\n');
-  }
+
+  // 不需要这个控制台输出
+  // if (printMessagesToStdout) {
+  //   process.stdout.write(
+  //     JSON.stringify(Object.values(extractedMessages), null, 2)
+  //   );
+  //   process.stdout.write('\n');
+  // }
+
+  return extractedMessages;
 }
