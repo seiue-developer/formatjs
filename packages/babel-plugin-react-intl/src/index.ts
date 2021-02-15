@@ -267,7 +267,7 @@ function isFormatMessageCall(
     return false;
   }
 
-  return callee.node.name === 'formatMessage';
+  return callee.node.name === 'formatMessage' || callee.node.name === '$t';
 }
 
 function assertObjectExpression(
